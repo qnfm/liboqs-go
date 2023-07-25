@@ -3,13 +3,13 @@ package oqstests
 
 import (
 	"bytes"
-	"github.com/open-quantum-safe/liboqs-go/oqs/rand"
 	"log"
 	"runtime"
 	"sync"
 	"testing"
 
 	"github.com/open-quantum-safe/liboqs-go/oqs"
+	"github.com/open-quantum-safe/liboqs-go/oqs/rand"
 )
 
 // disabledKEMPatterns lists KEMs for which unit testing is disabled
@@ -17,6 +17,8 @@ var disabledKEMPatterns []string
 
 // noThreadKEMPatterns lists KEMs that have issues running in a separate thread
 var noThreadKEMPatterns = []string{"LEDAcryptKEM-LT52", "HQC-256"}
+
+var allSchemes = []string{"BIKE-L1", "BIKE-L3", "BIKE-L5", "Classic-McEliece-348864", "Classic-McEliece-348864f", "Classic-McEliece-460896", "Classic-McEliece-460896f", "Classic-McEliece-6688128", "Classic-McEliece-6688128f", "Classic-McEliece-6960119", "Classic-McEliece-6960119f", "Classic-McEliece-8192128", "Classic-McEliece-8192128f", "HQC-128", "HQC-192", "HQC-256", "Kyber512", "Kyber768", "Kyber1024", "sntrup761", "FrodoKEM-640-AES", "FrodoKEM-640-SHAKE", "FrodoKEM-976-AES", "FrodoKEM-976-SHAKE", "FrodoKEM-1344-AES", "FrodoKEM-1344-SHAKE"}
 
 // wgKEMCorrectness groups goroutines and blocks the caller until all goroutines finish.
 var wgKEMCorrectness sync.WaitGroup
@@ -157,5 +159,62 @@ func TestUnsupportedKeyEncapsulation(t *testing.T) {
 	defer client.Clean()
 	if err := client.Init("unsupported_kem", nil); err == nil {
 		t.Errorf("Unsupported KEM should have emitted an error")
+	}
+}
+
+func BenchmarkGenerateKeyPair(b *testing.B) {
+	for _, scheme := range allSchemes {
+		kem := oqs.KeyEncapsulation{}
+		defer kem.Clean()
+		if err := kem.Init(scheme, nil); err != nil {
+			b.Fatal(err)
+		}
+		b.Run(scheme, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				kem.GenerateKeyPair()
+			}
+		})
+	}
+}
+
+func BenchmarkEncapsulate(b *testing.B) {
+	for _, scheme := range allSchemes {
+		kem := oqs.KeyEncapsulation{}
+		defer kem.Clean()
+		if err := kem.Init(scheme, nil); err != nil {
+			b.Fatal(err)
+		}
+		pk, err := kem.GenerateKeyPair()
+		if err != nil {
+			b.Fatal(err)
+		}
+		b.Run(scheme, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				kem.EncapSecret(pk)
+			}
+		})
+	}
+}
+
+func BenchmarkDecapsulate(b *testing.B) {
+	for _, scheme := range allSchemes {
+		kem := oqs.KeyEncapsulation{}
+		defer kem.Clean()
+		if err := kem.Init(scheme, nil); err != nil {
+			b.Fatal(err)
+		}
+		pk, err := kem.GenerateKeyPair()
+		if err != nil {
+			b.Fatal(err)
+		}
+		ct, _, err := kem.EncapSecret(pk)
+		if err != nil {
+			b.Fatal(err)
+		}
+		b.Run(scheme, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				kem.DecapSecret(ct)
+			}
+		})
 	}
 }
