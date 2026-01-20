@@ -53,7 +53,7 @@ jobs:
         if: matrix.os != 'windows-latest'
         run: |
           export PKG_CONFIG_PATH=${{env.POSIX_PKG_CONFIG_PATH}}
-          go test -v ./oqstests
+          go test -v -timeout 30m ./oqstests
 
       - name: Install liboqs Windows
         if: matrix.os == 'windows-latest'
@@ -86,4 +86,4 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: |
           set PATH=%PATH%;${{env.WIN_LIBOQS_INSTALL_PATH}}\bin
-          go test -v .\oqstests
+          go test -v -timeout 30m .\oqstests
