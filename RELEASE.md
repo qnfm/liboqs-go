@@ -24,7 +24,7 @@ See in particular limitations on intended use.
 
 ## Release notes
 
-This release of liboqs-go was released on January 20, 2026. Its release page on
+This release of liboqs-go was released on January 26, 2026. Its release page on
 GitHub is https://github.com/open-quantum-safe/liboqs-go/releases/tag/0.15.0.
 
 ---
