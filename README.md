@@ -71,7 +71,9 @@ The project contains the following files and directories:
 
 ## Functional restrictions
 
-No known issues as of liboqs-0.12.0
+No known issues as of liboqs-0.15.0
+
+**Important:** As of liboqs 0.15.0, Dilithium has been removed. Users should migrate to ML-DSA (FIPS 204) instead. SPHINCS+ is still supported in liboqs 0.15.0 but will be removed in 0.16.0 and replaced by SLH-DSA.
 
 ---
 

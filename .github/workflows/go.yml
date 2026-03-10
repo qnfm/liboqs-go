@@ -13,14 +13,13 @@ env:
   LD_LIBRARY_PATH: /usr/local/lib
   DYLD_LIBRARY_PATH: /usr/local/lib
   POSIX_PKG_CONFIG_PATH: ${{github.workspace}}/.config
-  WIN_LIBOQS_INSTALL_PATH: C:\liboqs
-  WIN_PKG_CONFIG_PATH: C:\Strawberry\c\lib\pkgconfig
 
 jobs:
-  build:
+  # POSIX builds (Linux, macOS)
+  build-posix:
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -31,16 +30,14 @@ jobs:
         with:
           go-version: 1.21
 
-      - name: Install liboqs POSIX
-        if: matrix.os != 'windows-latest'
+      - name: Install liboqs
         run: |
           git clone --branch main --single-branch --depth 1 https://github.com/open-quantum-safe/liboqs
           cmake -S liboqs -B liboqs/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DBUILD_SHARED_LIBS=ON -DOQS_BUILD_ONLY_LIB=ON
           cmake --build liboqs/build --parallel 4
           sudo cmake --build liboqs/build --target install
 
-      - name: Run examples POSIX
-        if: matrix.os != 'windows-latest'
+      - name: Run examples
         run: |
           export PKG_CONFIG_PATH=${{env.POSIX_PKG_CONFIG_PATH}}
           go run ./examples/kem/kem.go
@@ -49,41 +46,72 @@ jobs:
           echo
           go run ./examples/rand/rand.go
 
-      - name: Run unit tests POSIX
-        if: matrix.os != 'windows-latest'
+      - name: Run unit tests
         run: |
           export PKG_CONFIG_PATH=${{env.POSIX_PKG_CONFIG_PATH}}
-          go test -v ./oqstests
+          go test -v -timeout 30m ./oqstests
 
-      - name: Install liboqs Windows
-        if: matrix.os == 'windows-latest'
-        shell: cmd
+  # Windows build using MSYS2/MinGW
+  build-windows:
+    runs-on: windows-latest
+    env:
+      LIBOQS_INSTALL_PATH: C:/liboqs
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.21
+
+      - name: Set up MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          path-type: inherit
+          update: true
+          install: git mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja mingw-w64-x86_64-pkg-config
+
+      - name: Install liboqs
+        shell: msys2 {0}
         run: |
           git clone --branch main --single-branch --depth 1 https://github.com/open-quantum-safe/liboqs
-          cmake -S liboqs -B liboqs\build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCMAKE_INSTALL_PREFIX=${{env.WIN_LIBOQS_INSTALL_PATH}} -DBUILD_SHARED_LIBS=ON -DOQS_BUILD_ONLY_LIB=ON
-          cmake --build liboqs\build --parallel 4
-          cmake --build liboqs\build --target install
+          cmake -S liboqs -B liboqs/build -G Ninja \
+            -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
+            -DCMAKE_INSTALL_PREFIX=$LIBOQS_INSTALL_PATH \
+            -DBUILD_SHARED_LIBS=ON \
+            -DOQS_BUILD_ONLY_LIB=ON \
+            -DCMAKE_C_FLAGS="-D__ORDER_LITTLE_ENDIAN__=1234 -D__ORDER_BIG_ENDIAN__=4321 -D__BYTE_ORDER__=1234"
+          cmake --build liboqs/build --parallel 4
+          cmake --build liboqs/build --target install
 
-      - name: Configure pkgconfig Windows
-        if: matrix.os == 'windows-latest'
-        shell: cmd
+      - name: Configure pkgconfig
+        shell: msys2 {0}
         run: |
-          copy .\.config\liboqs-go.pc.win64 ${{env.WIN_PKG_CONFIG_PATH}}\liboqs-go.pc
+          mkdir -p /mingw64/lib/pkgconfig
+          cp .config/liboqs-go.pc.win64 /mingw64/lib/pkgconfig/liboqs-go.pc
 
-      - name: Run examples Windows
-        if: matrix.os == 'windows-latest'
-        shell: cmd
+      - name: Run examples
+        shell: msys2 {0}
+        env:
+          CGO_ENABLED: 1
+          CC: gcc
+          PKG_CONFIG_PATH: /mingw64/lib/pkgconfig
         run: |
-          set PATH=%PATH%;${{env.WIN_LIBOQS_INSTALL_PATH}}\bin
-          go run .\examples\kem\kem.go
-          echo.
-          go run .\examples\sig\sig.go
-          echo.
-          go run .\examples\rand\rand.go
+          export PATH="/c/liboqs/bin:$PATH"
+          go run ./examples/kem/kem.go
+          echo
+          go run ./examples/sig/sig.go
+          echo
+          go run ./examples/rand/rand.go
 
-      - name: Run unit tests Windows
-        shell: cmd
-        if: matrix.os == 'windows-latest'
+      - name: Run unit tests
+        shell: msys2 {0}
+        env:
+          CGO_ENABLED: 1
+          CC: gcc
+          PKG_CONFIG_PATH: /mingw64/lib/pkgconfig
         run: |
-          set PATH=%PATH%;${{env.WIN_LIBOQS_INSTALL_PATH}}\bin
-          go test -v .\oqstests
+          export PATH="/c/liboqs/bin:$PATH"
+          go test -v -timeout 30m ./oqstests
